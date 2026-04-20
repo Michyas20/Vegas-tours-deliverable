@@ -3,6 +3,7 @@
 import { useVegasStore } from '@/lib/useVegasStore';
 import ExplorerNavbar from '@/components/luxury-ui/ExplorerNavbar';
 import ExplorerFooter from '@/components/luxury-ui/ExplorerFooter';
+import BookingFunnel from '@/components/luxury-ui/BookingFunnel';
 import { Clock, MapPin, CheckCircle, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -39,9 +40,13 @@ export default function TourDetailPage() {
 
   const templateIdx = templates.indexOf(template);
   const mainImage = IMAGES[templateIdx % IMAGES.length];
-  const tourSlots = slots.filter((s) => s.templateId === template.id && s.status === 'SCHEDULED');
 
-  // Build a synthetic itinerary timeline from the template stops
+  // Available slots: SCHEDULED, future, with capacity
+  const availableSlots = slots.filter(
+    (s) => s.templateId === template.id && s.status === 'SCHEDULED' && s.currentCapacity < s.maxCapacity
+  );
+
+  // Build itinerary timeline
   const itinerary = template.itinerary.map((stop, i) => {
     const hour = 6 + Math.floor((i * template.durationHours) / template.itinerary.length);
     const ampm = hour >= 12 ? 'PM' : 'AM';
@@ -82,7 +87,6 @@ export default function TourDetailPage() {
 
           {/* LEFT: Main Info */}
           <div className="vh-tour-main-content">
-
             <div style={{ marginBottom: '3rem' }}>
               <h2 style={{ marginBottom: '1rem' }}>About This Tour</h2>
               <p>{template.description}</p>
@@ -125,22 +129,21 @@ export default function TourDetailPage() {
                   <strong>Stops:</strong> {template.itinerary.join(' → ')}
                 </p>
                 <p>
-                  <strong>Available Slots:</strong> {tourSlots.length} upcoming date{tourSlots.length !== 1 ? 's' : ''}
+                  <strong>Available Dates:</strong> {availableSlots.length} upcoming
                 </p>
               </div>
             </div>
           </div>
 
-          {/* RIGHT: Sticky Booking Panel */}
+          {/* RIGHT: Sticky Booking Panel — NOW WITH FUNNEL */}
           <div className="vh-sticky-panel">
-
             <div className="vh-booking-panel">
               <div className="vh-booking-price">
                 ${template.basePricePerPerson}{' '}
                 <span>/ adult</span>
               </div>
 
-              <div className="vh-booking-meta">
+              <div className="vh-booking-meta" style={{ marginBottom: '1.5rem' }}>
                 <div className="vh-booking-meta-item">
                   <Clock size={20} color="var(--vh-accent)" />
                   <span>{template.durationHours} Hours Duration</span>
@@ -151,18 +154,11 @@ export default function TourDetailPage() {
                 </div>
               </div>
 
-              <Link
-                href="/explore/tours"
-                className="vh-primary-btn pulse"
-                style={{
-                  width: '100%', padding: '1.2rem', fontSize: '1.2rem',
-                  textDecoration: 'none', textAlign: 'center', justifyContent: 'center',
-                }}
-              >
-                Check Availability
-              </Link>
-              <p style={{ textAlign: 'center', margin: '1rem 0 0', fontSize: '0.85rem', color: '#aaa' }}>
-                No payment required to check dates
+              {/* ══ BOOKING FUNNEL ══ */}
+              <BookingFunnel template={template} availableSlots={availableSlots} />
+
+              <p style={{ textAlign: 'center', margin: '1rem 0 0', fontSize: '0.8rem', color: '#aaa' }}>
+                Free cancellation 48h+ before tour
               </p>
             </div>
 
@@ -175,7 +171,6 @@ export default function TourDetailPage() {
               </p>
             </div>
           </div>
-
         </div>
 
         {/* Bottom nav */}

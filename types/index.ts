@@ -69,6 +69,12 @@ export interface Booking {
   pickupLocation: PickupLocation;
   createdAt: string;            // ISO 8601
   specialRequirements?: string;
+  guestInfo?: {
+    fullName: string;
+    email: string;
+    phone: string;
+  };
+  holdExpiresAt?: string;       // ISO 8601 — spot hold timeout
 }
 
 // ─── Vehicle (Fleet) ────────────────────────────────────────────
@@ -90,6 +96,7 @@ export type AuditAction =
   | 'BOOKING_CANCELLED'
   | 'PAYMENT_DEPOSIT'
   | 'PAYMENT_FULL'
+  | 'PAYMENT_CONFIRMED'
   | 'SLOT_CREATED'
   | 'SLOT_MAINTENANCE'
   | 'SLOT_COMPLETED'

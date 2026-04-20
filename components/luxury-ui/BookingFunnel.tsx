@@ -4,12 +4,13 @@ import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, MapPin, CreditCard, CheckCircle, ChevronDown,
-  AlertCircle, Loader2, Minus, Plus,
+  AlertCircle, Loader2, Minus, Plus, User,
 } from 'lucide-react';
 import { useVegasStore, BookingError } from '@/lib/useVegasStore';
 import { validatePickup } from '@/lib/engines/geo.validator';
 import { calculatePayment } from '@/lib/engines/payment.engine';
 import { useToast } from '@/components/luxury-ui/ToastProvider';
+import PaymentInstructions from '@/components/luxury-ui/PaymentInstructions';
 import type { TourTemplate, TourSlot, GeoVerdict, PaymentBreakdown } from '@/types';
 
 /* ─── Preset Hotels ────────────────────────────────────────────────── */
@@ -53,6 +54,11 @@ export default function BookingFunnel({ template, availableSlots }: BookingFunne
   const [customLng, setCustomLng] = useState('');
   const [geoVerdict, setGeoVerdict] = useState<GeoVerdict | null>(null);
   const [geoValidating, setGeoValidating] = useState(false);
+
+  // Step 3 state — Guest Info
+  const [guestName, setGuestName] = useState('');
+  const [guestEmail, setGuestEmail] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
 
   // Derived
   const selectedSlot = availableSlots.find((s) => s.id === selectedSlotId);
@@ -104,9 +110,13 @@ export default function BookingFunnel({ template, availableSlots }: BookingFunne
     }, 600);
   };
 
-  // ── Booking Submit ──
+  // ── Booking Submit (Guest Model — no payment processing) ──
   const handleConfirmBooking = async () => {
     if (!selectedSlot || !geoVerdict?.withinRadius) return;
+    if (!guestName.trim() || !guestEmail.trim() || !guestPhone.trim()) {
+      addToast('Please fill in all guest information', 'warning');
+      return;
+    }
 
     setIsSubmitting(true);
     const hotel = STRIP_HOTELS[selectedHotelIdx];
@@ -115,7 +125,7 @@ export default function BookingFunnel({ template, availableSlots }: BookingFunne
     try {
       const result = store.createBooking({
         slotId: selectedSlotId,
-        customerId: 'usr-explorer-01', // Demo user
+        customerId: 'guest-' + Date.now(),
         passengerCount,
         pickupLocation: {
           hotelName: isCustom ? 'Custom Location' : hotel.name,
@@ -124,11 +134,17 @@ export default function BookingFunnel({ template, availableSlots }: BookingFunne
             ? { lat: parseFloat(customLat), lng: parseFloat(customLng) }
             : { lat: hotel.lat, lng: hotel.lng },
         },
+        guestInfo: {
+          fullName: guestName.trim(),
+          email: guestEmail.trim(),
+          phone: guestPhone.trim(),
+        },
       });
 
+      // No auto-payment — guest pays via Zelle/Venmo
       setBookingResult(result);
-      setCurrentStep(4); // Success state
-      addToast(`Booking confirmed! ID: ${result.bookingId}`, 'success');
+      setCurrentStep(5); // Payment instructions
+      addToast('Spot reserved! Complete payment to confirm.', 'success');
     } catch (err) {
       if (err instanceof BookingError) {
         addToast(err.message, 'error');
@@ -143,34 +159,21 @@ export default function BookingFunnel({ template, availableSlots }: BookingFunne
   // ── Step validation ──
   const canProceedStep1 = selectedSlotId && passengerCount > 0 && !isOverCapacity;
   const canProceedStep2 = geoVerdict?.withinRadius === true;
+  const canProceedStep3 = guestName.trim().length > 0 && guestEmail.includes('@') && guestPhone.trim().length > 5;
 
   // ═══════════════════════════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════════════════════════
 
-  // Success state
-  if (currentStep === 4 && bookingResult) {
+  // Payment instructions (guest model)
+  if (currentStep === 5 && bookingResult) {
     return (
       <div className="vh-booking-funnel">
-        <div className="vh-booking-success">
-          <div className="vh-success-icon">
-            <CheckCircle size={48} />
-          </div>
-          <h3>Booking Confirmed!</h3>
-          <p style={{ color: '#666', marginBottom: '1.5rem' }}>
-            Your adventure is booked. Check &quot;My Bookings&quot; for details.
-          </p>
-          <div className="vh-reference-box">
-            <small style={{ color: '#888', textTransform: 'uppercase', letterSpacing: '2px' }}>Reference</small>
-            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--vh-primary)', letterSpacing: '2px', marginTop: '0.5rem' }}>
-              {bookingResult.bookingId.toUpperCase()}
-            </div>
-          </div>
-          <div style={{ marginTop: '1.5rem', fontSize: '0.9rem', color: '#555' }}>
-            <p><strong>Total:</strong> ${bookingResult.payment.totalAmount.toFixed(2)}</p>
-            <p><strong>Deposit Due:</strong> ${bookingResult.payment.depositRequired.toFixed(2)}</p>
-          </div>
-        </div>
+        <PaymentInstructions
+          bookingId={bookingResult.bookingId}
+          payment={bookingResult.payment}
+          guestName={guestName}
+        />
       </div>
     );
   }
@@ -365,6 +368,74 @@ export default function BookingFunnel({ template, availableSlots }: BookingFunne
                   disabled={!canProceedStep2}
                   onClick={() => setCurrentStep(3)}
                 >
+                  Continue to Guest Info
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ══════════════ STEP 3: Guest Information ══════════════ */}
+      <div className={`vh-step ${currentStep === 3 ? 'vh-step-active' : currentStep > 3 ? 'vh-step-complete' : ''}`}>
+        <button
+          className="vh-step-header"
+          onClick={() => currentStep > 3 && setCurrentStep(3)}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {currentStep > 3 ? <CheckCircle size={20} color="#10b981" /> : <User size={20} />}
+            <span>3. Guest Information</span>
+          </div>
+          <ChevronDown size={18} style={{ transform: currentStep === 3 ? 'rotate(180deg)' : 'rotate(0deg)', transition: '0.3s' }} />
+        </button>
+
+        <AnimatePresence>
+          {currentStep === 3 && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              style={{ overflow: 'hidden' }}
+            >
+              <div className="vh-step-body">
+                <label className="vh-label">Full Name</label>
+                <input
+                  className="vh-input"
+                  type="text"
+                  placeholder="John Smith"
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                />
+
+                <label className="vh-label" style={{ marginTop: '1rem' }}>Email</label>
+                <input
+                  className="vh-input"
+                  type="email"
+                  placeholder="john@example.com"
+                  value={guestEmail}
+                  onChange={(e) => setGuestEmail(e.target.value)}
+                />
+
+                <label className="vh-label" style={{ marginTop: '1rem' }}>Phone</label>
+                <input
+                  className="vh-input"
+                  type="tel"
+                  placeholder="+1 (555) 123-4567"
+                  value={guestPhone}
+                  onChange={(e) => setGuestPhone(e.target.value)}
+                />
+
+                <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '0.75rem' }}>
+                  No account needed. We&apos;ll use this to send your boarding pass.
+                </p>
+
+                <button
+                  className="vh-primary-btn"
+                  style={{ width: '100%', marginTop: '1rem', opacity: canProceedStep3 ? 1 : 0.5 }}
+                  disabled={!canProceedStep3}
+                  onClick={() => setCurrentStep(4)}
+                >
                   Continue to Payment
                 </button>
               </div>
@@ -373,18 +444,18 @@ export default function BookingFunnel({ template, availableSlots }: BookingFunne
         </AnimatePresence>
       </div>
 
-      {/* ══════════════ STEP 3: Payment Summary ══════════════ */}
-      <div className={`vh-step ${currentStep === 3 ? 'vh-step-active' : ''}`}>
+      {/* ══════════════ STEP 4: Payment Summary ══════════════ */}
+      <div className={`vh-step ${currentStep === 4 ? 'vh-step-active' : ''}`}>
         <button className="vh-step-header" onClick={() => {}}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <CreditCard size={20} />
-            <span>3. Payment Summary</span>
+            <span>4. Payment Summary</span>
           </div>
-          <ChevronDown size={18} style={{ transform: currentStep === 3 ? 'rotate(180deg)' : 'rotate(0deg)', transition: '0.3s' }} />
+          <ChevronDown size={18} style={{ transform: currentStep === 4 ? 'rotate(180deg)' : 'rotate(0deg)', transition: '0.3s' }} />
         </button>
 
         <AnimatePresence>
-          {currentStep === 3 && paymentPreview && (
+          {currentStep === 4 && paymentPreview && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
@@ -415,13 +486,13 @@ export default function BookingFunnel({ template, availableSlots }: BookingFunne
                       <>
                         <div className="vh-deposit-label">💳 Full Payment Required</div>
                         <div className="vh-deposit-reason">Tour departs in {paymentPreview.daysUntilTour} day{paymentPreview.daysUntilTour !== 1 ? 's' : ''} (within 10-day window)</div>
-                        <div className="vh-deposit-amount">${paymentPreview.totalAmount.toFixed(2)} due now</div>
+                        <div className="vh-deposit-amount">${paymentPreview.totalAmount.toFixed(2)} via Zelle/Venmo</div>
                       </>
                     ) : (
                       <>
                         <div className="vh-deposit-label">💰 20% Deposit</div>
                         <div className="vh-deposit-reason">Tour is {paymentPreview.daysUntilTour} days away — only a deposit required today</div>
-                        <div className="vh-deposit-amount">${paymentPreview.depositRequired.toFixed(2)} due now</div>
+                        <div className="vh-deposit-amount">${paymentPreview.depositRequired.toFixed(2)} via Zelle/Venmo</div>
                         <div className="vh-deposit-remaining">Remaining ${(paymentPreview.totalAmount - paymentPreview.depositRequired).toFixed(2)} due before tour date</div>
                       </>
                     )}
@@ -435,14 +506,14 @@ export default function BookingFunnel({ template, availableSlots }: BookingFunne
                   onClick={handleConfirmBooking}
                 >
                   {isSubmitting ? (
-                    <><Loader2 size={18} className="vh-spin" /> Processing...</>
+                    <><Loader2 size={18} className="vh-spin" /> Reserving...</>
                   ) : (
-                    `Confirm & Pay $${paymentPreview.depositRequired.toFixed(2)}`
+                    `Reserve My Spot`
                   )}
                 </button>
 
                 <p style={{ textAlign: 'center', fontSize: '0.8rem', color: '#888', marginTop: '0.75rem' }}>
-                  Secure checkout • Free cancellation 48h+ before tour
+                  No charge now • Pay via Zelle/Venmo • Free cancellation 48h+ before tour
                 </p>
               </div>
             </motion.div>

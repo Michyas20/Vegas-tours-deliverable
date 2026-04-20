@@ -1,5 +1,6 @@
 import { Syne, Outfit, Manrope } from 'next/font/google';
 import '../globals-horizon.css';
+import ExploreClientShell from '@/components/luxury-ui/ExploreClientShell';
 
 const syne = Syne({
   variable: '--font-syne',
@@ -52,7 +53,7 @@ export default function ExploreLayout({
           font-family: var(--font-outfit), sans-serif;
         }
       `}</style>
-      {children}
+      <ExploreClientShell>{children}</ExploreClientShell>
     </div>
   );
 }

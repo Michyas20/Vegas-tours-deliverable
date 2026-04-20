@@ -25,7 +25,7 @@ const STATUS_CONFIG: Record<string, { label: string; dot: string; bg: string }> 
 /* ─── Component ────────────────────────────────────────────────────── */
 
 export default function CapacityMonitor() {
-  const { slots, templates, users, vehicles, bookings, setSlotMaintenance, completeSlot, getBookingsForSlot } = useVegasStore();
+  const { slots, templates, users, vehicles, bookings, setSlotMaintenance, completeSlot, getBookingsForSlot, confirmPayment } = useVegasStore();
 
   const [statusFilter, setStatusFilter] = useState<'ALL' | SlotStatus>('ALL');
   const [expandedSlot, setExpandedSlot] = useState<string | null>(null);
@@ -194,22 +194,24 @@ export default function CapacityMonitor() {
                   .filter((b) => b.paymentStatus !== 'CANCELLED')
                   .map((booking) => {
                     const customer = users.find((u) => u.id === booking.customerId) as { name: string } | undefined;
+                    const displayName = booking.guestInfo?.fullName || customer?.name || booking.customerId;
 
                     const paymentBg =
                       booking.paymentStatus === 'FULLY_PAID'
                         ? 'bg-success/10 text-success'
                         : booking.paymentStatus === 'DEPOSIT_PAID'
                         ? 'bg-warning/10 text-warning'
-                        : 'bg-accent text-muted-foreground';
+                        : 'bg-danger/10 text-danger';
 
                     return (
                       <div key={booking.id} className="flex items-center gap-4 px-3 py-2.5 rounded-lg bg-accent/50">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-foreground">
-                            {customer?.name || booking.customerId}
+                            {displayName}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {booking.passengerCount} passenger{booking.passengerCount !== 1 ? 's' : ''} · {booking.pickupLocation.hotelName}
+                            {booking.guestInfo?.email && ` · ${booking.guestInfo.email}`}
                           </p>
                         </div>
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${paymentBg}`}>
@@ -218,6 +220,14 @@ export default function CapacityMonitor() {
                         <span className="text-sm font-mono text-muted-foreground">
                           ${booking.totalAmount}
                         </span>
+                        {booking.paymentStatus === 'PENDING' && (
+                          <button
+                            onClick={() => confirmPayment(booking.id)}
+                            className="px-2.5 py-1 text-xs font-semibold bg-success text-white rounded-md hover:bg-success/90 transition-colors whitespace-nowrap"
+                          >
+                            ✅ Confirm Payment
+                          </button>
+                        )}
                       </div>
                     );
                   })}

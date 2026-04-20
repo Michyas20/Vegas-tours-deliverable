@@ -10,6 +10,7 @@ import { usePathname } from 'next/navigation';
 const navItems = [
   { href: '/explore', label: 'Home' },
   { href: '/explore/tours', label: 'Tours' },
+  { href: '/explore/my-bookings', label: 'My Bookings' },
 ];
 
 /* ─── Component ────────────────────────────────────────────────────── */
@@ -66,9 +67,21 @@ export default function ExplorerNavbar() {
             <Mountain color="#F7C948" size={32} />
             <span>Vegas Horizon</span>
           </Link>
-          <Link href="/explore/tours" className="vh-nav-btn" style={{ textDecoration: 'none' }}>
-            SEE TOURS
-          </Link>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <Link
+              href="/explore/my-bookings"
+              style={{
+                color: 'rgba(255,255,255,0.8)', textDecoration: 'none',
+                fontSize: '0.85rem', fontWeight: 600, letterSpacing: '1px',
+                textTransform: 'uppercase', textShadow: '0 2px 8px rgba(0,0,0,0.6)',
+              }}
+            >
+              My Bookings
+            </Link>
+            <Link href="/explore/tours" className="vh-nav-btn" style={{ textDecoration: 'none' }}>
+              SEE TOURS
+            </Link>
+          </div>
         </div>
       </nav>
     </>

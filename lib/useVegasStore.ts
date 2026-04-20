@@ -93,6 +93,11 @@ interface VegasStore {
     pickupLocation: PickupLocation;
     specialRequirements?: string;
     passengerAges?: number[];
+    guestInfo?: {
+      fullName: string;
+      email: string;
+      phone: string;
+    };
   }) => { bookingId: string; payment: PaymentBreakdown };
 
   /**
@@ -157,6 +162,23 @@ interface VegasStore {
 
   /** Returns all bookings for a customer */
   getBookingsForCustomer: (customerId: string) => Booking[];
+
+  // ── Settlement ──────────────────────────────────────────────────
+
+  /**
+   * Simulates daily auto-collection. For each DEPOSIT_PAID booking
+   * whose tour is within 7 days, collects the remaining 80% balance
+   * and sets status to FULLY_PAID. Returns count of settlements.
+   */
+  runDailySettlement: () => number;
+
+  // ── Admin Payment Verification ───────────────────────────────────
+
+  /**
+   * Admin confirms payment received (Zelle/Venmo). Sets booking to
+   * DEPOSIT_PAID or FULLY_PAID based on the 10-day rule.
+   */
+  confirmPayment: (bookingId: string) => void;
 }
 
 // ─── Store Implementation ───────────────────────────────────────
@@ -254,6 +276,8 @@ export const useVegasStore = create<VegasStore>()(
           pickupLocation: data.pickupLocation,
           createdAt: state.mockDateISO,
           specialRequirements: data.specialRequirements,
+          guestInfo: data.guestInfo,
+          holdExpiresAt: new Date(new Date(state.mockDateISO).getTime() + 2 * 60 * 60 * 1000).toISOString(),
         };
 
         const auditEntry: AuditEntry = {
@@ -563,6 +587,109 @@ export const useVegasStore = create<VegasStore>()(
 
       getBookingsForCustomer: (customerId) => {
         return get().bookings.filter((b) => b.customerId === customerId);
+      },
+
+      // ═══════════════════════════════════════════════════════════════
+      // DAILY SETTLEMENT: Auto-collect remaining balances
+      // ═══════════════════════════════════════════════════════════════
+
+      runDailySettlement: () => {
+        const state = get();
+        const DAY_MS = 86_400_000;
+        const now = new Date(state.mockDateISO).getTime();
+        const sevenDaysFromNow = now + 7 * DAY_MS;
+        let settled = 0;
+
+        const updatedBookings = state.bookings.map((booking) => {
+          if (booking.paymentStatus !== 'DEPOSIT_PAID') return booking;
+
+          const slot = state.slots.find((s) => s.id === booking.slotId);
+          if (!slot) return booking;
+
+          const tourTime = new Date(slot.date).getTime();
+          if (tourTime > sevenDaysFromNow || tourTime <= now) return booking;
+
+          // Auto-collect remaining balance
+          settled++;
+          return {
+            ...booking,
+            amountPaid: booking.totalAmount,
+            paymentStatus: 'FULLY_PAID' as const,
+          };
+        });
+
+        if (settled > 0) {
+          const auditEntries = state.bookings
+            .filter((b) => {
+              if (b.paymentStatus !== 'DEPOSIT_PAID') return false;
+              const slot = state.slots.find((s) => s.id === b.slotId);
+              if (!slot) return false;
+              const tourTime = new Date(slot.date).getTime();
+              return tourTime <= sevenDaysFromNow && tourTime > now;
+            })
+            .map((b) => ({
+              id: generateId('audit'),
+              timestamp: state.mockDateISO,
+              action: 'PAYMENT_FULL' as const,
+              entityId: b.id,
+              entityType: 'BOOKING' as const,
+              details: `Auto-settlement: collected remaining $${(b.totalAmount - b.amountPaid).toFixed(2)} for booking ${b.id}`,
+              userId: 'SYSTEM',
+            }));
+
+          set({
+            bookings: updatedBookings,
+            auditLog: [...state.auditLog, ...auditEntries],
+          });
+        }
+
+        return settled;
+      },
+
+      // ═══════════════════════════════════════════════════════════════
+      // ADMIN PAYMENT VERIFICATION: Manual confirm (Zelle/Venmo)
+      // ═══════════════════════════════════════════════════════════════
+
+      confirmPayment: (bookingId) => {
+        const state = get();
+        const booking = state.bookings.find((b) => b.id === bookingId);
+        if (!booking || booking.paymentStatus !== 'PENDING') return;
+
+        const slot = state.slots.find((s) => s.id === booking.slotId);
+        if (!slot) return;
+
+        // Determine if full or deposit based on 10-day rule
+        const payment = calculatePayment(
+          booking.totalAmount / booking.passengerCount,
+          booking.passengerCount,
+          state.mockDateISO,
+          slot.date
+        );
+
+        const newStatus = payment.isFullPaymentRequired ? 'FULLY_PAID' : 'DEPOSIT_PAID';
+        const amountPaid = payment.isFullPaymentRequired
+          ? payment.totalAmount
+          : payment.depositRequired;
+
+        set({
+          bookings: state.bookings.map((b) =>
+            b.id === bookingId
+              ? { ...b, paymentStatus: newStatus as PaymentStatus, amountPaid }
+              : b
+          ),
+          auditLog: [
+            ...state.auditLog,
+            {
+              id: generateId('audit'),
+              timestamp: state.mockDateISO,
+              action: 'PAYMENT_CONFIRMED' as AuditAction,
+              entityId: bookingId,
+              entityType: 'BOOKING' as const,
+              details: `Admin confirmed payment: $${amountPaid.toFixed(2)} (${newStatus.replace('_', ' ')}) for booking ${bookingId}`,
+              userId: 'CONCIERGE',
+            },
+          ],
+        });
       },
     }),
     {
