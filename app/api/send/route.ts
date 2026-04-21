@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
-import { PendingPaymentEmail } from '@/emails/PendingPaymentEmail';
-import { PaymentConfirmedEmail } from '@/emails/PaymentConfirmedEmail';
+import { PendingPaymentEmail } from '@/emails/PendingPaymentEmailV2';
+import { PaymentConfirmedEmail } from '@/emails/PaymentConfirmedEmailV2';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
