@@ -204,29 +204,35 @@ export default function CapacityMonitor() {
                         : 'bg-danger/10 text-danger';
 
                     return (
-                      <div key={booking.id} className="flex items-center gap-4 px-3 py-2.5 rounded-lg bg-accent/50">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground">
-                            {displayName}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {booking.passengerCount} passenger{booking.passengerCount !== 1 ? 's' : ''} · {booking.pickupLocation.hotelName}
-                            {booking.guestInfo?.email && ` · ${booking.guestInfo.email}`}
-                          </p>
-                        </div>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${paymentBg}`}>
-                          {booking.paymentStatus.replace('_', ' ')}
-                        </span>
-                        <span className="text-sm font-mono text-muted-foreground">
-                          ${booking.totalAmount}
-                        </span>
+                      <div key={booking.id} className="flex flex-col gap-2 px-3 py-2.5 rounded-lg bg-accent/50">
+                        <div className="flex items-center gap-4">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground">
+                              {displayName}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {booking.passengerCount} passenger{booking.passengerCount !== 1 ? 's' : ''} · {booking.pickupLocation.hotelName}
+                              {booking.guestInfo?.email && ` · ${booking.guestInfo.email}`}
+                            </p>
+                          </div>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${paymentBg}`}>
+                            {booking.paymentStatus.replace('_', ' ')}
+                          </span>
+                          <span className="text-sm font-mono text-muted-foreground">
+                            ${booking.totalAmount}
+                          </span>
+                          </div>
+
+                        {/* Payment Instructions Preview for PENDING bookings */}
                         {booking.paymentStatus === 'PENDING' && (
-                          <button
-                            onClick={() => confirmPayment(booking.id)}
-                            className="px-2.5 py-1 text-xs font-semibold bg-success text-white rounded-md hover:bg-success/90 transition-colors whitespace-nowrap"
-                          >
-                            ✅ Confirm Payment
-                          </button>
+                          <div className="mt-2 p-2 bg-background/50 border border-border/50 rounded-md text-xs">
+                            <p className="font-semibold text-muted-foreground mb-1">Sent to Guest:</p>
+                            <div className="grid grid-cols-2 gap-2 text-foreground">
+                              <div><strong>Zelle:</strong> payments@vegashorizon.com</div>
+                              <div><strong>Venmo:</strong> @VegasHorizon</div>
+                              <div className="col-span-2"><strong>Reference Memo:</strong> <code className="bg-accent px-1 py-0.5 rounded text-primary">{booking.id.toUpperCase()}</code></div>
+                            </div>
+                          </div>
                         )}
                       </div>
                     );

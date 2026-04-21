@@ -42,6 +42,7 @@ import {
 
 // ─── Utility ────────────────────────────────────────────────────
 import { generateId } from '@/lib/utils';
+import { supabase } from '@/lib/supabaseClient';
 
 // ─── Error Types ────────────────────────────────────────────────
 
@@ -179,6 +180,14 @@ interface VegasStore {
    * DEPOSIT_PAID or FULLY_PAID based on the 10-day rule.
    */
   confirmPayment: (bookingId: string) => void;
+
+  // ── Supabase Integration ─────────────────────────────────────────
+
+  /**
+   * Initializes state from Supabase and sets up Postgres Real-Time
+   * watchers to instantly update local state (e.g. Boarding Pass).
+   */
+  initSupabase: () => Promise<void>;
 }
 
 // ─── Store Implementation ───────────────────────────────────────
@@ -299,6 +308,79 @@ export const useVegasStore = create<VegasStore>()(
           ),
           auditLog: [...state.auditLog, auditEntry],
         }));
+
+        // --- Supabase Remote Mutation (Optimistic Sync) ---
+        // 1. Triple-Chain Upsert: Template -> Slot -> Booking
+        supabase.from('tour_templates').upsert([{
+          id: template.id,
+          title: template.title,
+          description: template.description,
+          itinerary: template.itinerary,
+          duration_hours: template.durationHours,
+          base_price_per_person: template.basePricePerPerson,
+          min_age: template.minAge || 5,
+          inclusions: template.inclusions || []
+        }]).then(({ error: tmplError }) => {
+          if (tmplError) {
+            console.error('Failed to upsert template:', tmplError.message);
+            return;
+          }
+
+          // 2. Upsert slot
+          supabase.from('tour_slots').upsert([{
+            id: slot.id,
+            template_id: slot.templateId,
+            date: slot.date,
+            guide_id: slot.guideId,
+            vehicle_id: slot.vehicleId,
+            max_capacity: slot.maxCapacity,
+            current_capacity: slot.currentCapacity + data.passengerCount,
+            status: slot.status
+          }]).then(({ error: slotError }) => {
+            if (slotError) {
+              console.error('Failed to upsert slot:', slotError.message);
+              return;
+            }
+
+            // 3. Insert booking
+            supabase.from('bookings').insert([{
+              id: newBooking.id,
+              slot_id: newBooking.slotId,
+              customer_id: newBooking.customerId,
+              passenger_count: newBooking.passengerCount,
+              total_amount: newBooking.totalAmount,
+              amount_paid: newBooking.amountPaid,
+              payment_status: newBooking.paymentStatus,
+              pickup_location: newBooking.pickupLocation,
+              created_at: newBooking.createdAt,
+              special_requirements: newBooking.specialRequirements,
+              guest_info: newBooking.guestInfo,
+              hold_expires_at: newBooking.holdExpiresAt
+            }]).then(({ error }) => {
+              if (error) {
+                console.error('Supabase booking write failed:', error.message);
+              } else {
+                // Trigger Pending Payment Email
+                if (newBooking.guestInfo?.email) {
+                  fetch('/api/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      type: 'pending',
+                      payload: {
+                        guestEmail: newBooking.guestInfo.email,
+                        guestName: newBooking.guestInfo.fullName,
+                        tourName: template.title,
+                        totalAmount: newBooking.totalAmount,
+                        bookingId: newBooking.id
+                      }
+                    })
+                  }).catch(e => console.error('Failed to dispatch pending email:', e));
+                }
+              }
+            });
+          });
+        });
 
         return { bookingId, payment };
       },
@@ -655,21 +737,8 @@ export const useVegasStore = create<VegasStore>()(
         const booking = state.bookings.find((b) => b.id === bookingId);
         if (!booking || booking.paymentStatus !== 'PENDING') return;
 
-        const slot = state.slots.find((s) => s.id === booking.slotId);
-        if (!slot) return;
-
-        // Determine if full or deposit based on 10-day rule
-        const payment = calculatePayment(
-          booking.totalAmount / booking.passengerCount,
-          booking.passengerCount,
-          state.mockDateISO,
-          slot.date
-        );
-
-        const newStatus = payment.isFullPaymentRequired ? 'FULLY_PAID' : 'DEPOSIT_PAID';
-        const amountPaid = payment.isFullPaymentRequired
-          ? payment.totalAmount
-          : payment.depositRequired;
+        const newStatus = 'FULLY_PAID';
+        const amountPaid = booking.totalAmount;
 
         set({
           bookings: state.bookings.map((b) =>
@@ -685,11 +754,135 @@ export const useVegasStore = create<VegasStore>()(
               action: 'PAYMENT_CONFIRMED' as AuditAction,
               entityId: bookingId,
               entityType: 'BOOKING' as const,
-              details: `Admin confirmed payment: $${amountPaid.toFixed(2)} (${newStatus.replace('_', ' ')}) for booking ${bookingId}`,
+              details: `Admin verified payment: $${amountPaid.toFixed(2)} (${newStatus.replace('_', ' ')}) for booking ${bookingId}`,
               userId: 'CONCIERGE',
             },
           ],
         });
+
+        // --- Supabase Remote Mutation ---
+        supabase.from('bookings')
+          .update({
+            payment_status: newStatus,
+            amount_paid: amountPaid
+          })
+          .eq('id', bookingId)
+          .then(({ error }) => {
+            if (error) {
+              console.error('Supabase confirmPayment failed:', error.message);
+            } else {
+              // Trigger Verified Payment Email
+              const slot = state.slots.find(s => s.id === booking.slotId);
+              const template = slot ? state.templates.find(t => t.id === slot.templateId) : null;
+              
+              if (booking.guestInfo?.email) {
+                fetch('/api/send', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    type: 'verified',
+                    payload: {
+                      guestEmail: booking.guestInfo.email,
+                      guestName: booking.guestInfo.fullName,
+                      tourName: template?.title || 'Vegas Horizon Tour',
+                      tourDate: slot ? new Date(slot.date).toLocaleDateString() : 'N/A',
+                      bookingId: booking.id
+                    }
+                  })
+                }).catch(e => console.error('Failed to trigger verified email:', e));
+              }
+            }
+          });
+      },
+
+      initSupabase: async () => {
+        // 1. Fetch initial state
+        const [{ data: templatesData }, { data: slotsData }, { data: bookingsData }] = await Promise.all([
+          supabase.from('tour_templates').select('*'),
+          supabase.from('tour_slots').select('*'),
+          supabase.from('bookings').select('*'),
+        ]);
+
+        const state = get();
+
+        // Auto-seed database if empty (prevents foreign key errors on fresh databases)
+        if (templatesData && templatesData.length === 0) {
+          console.log('Seeding Supabase with local Tour Templates...');
+          const mappedTemplates = state.templates.map(t => ({
+            id: t.id,
+            title: t.title,
+            description: t.description,
+            itinerary: t.itinerary,
+            duration_hours: t.durationHours,
+            base_price_per_person: t.basePricePerPerson,
+            min_age: t.minAge || 5,
+            inclusions: t.inclusions || [],
+          }));
+          await supabase.from('tour_templates').insert(mappedTemplates);
+        }
+
+        if (slotsData && slotsData.length === 0) {
+          console.log('Seeding Supabase with local Tour Slots...');
+          const mappedSlots = state.slots.map(s => ({
+            id: s.id,
+            template_id: s.templateId,
+            date: s.date,
+            guide_id: s.guideId,
+            vehicle_id: s.vehicleId,
+            max_capacity: s.maxCapacity,
+            current_capacity: s.currentCapacity,
+            status: s.status,
+          }));
+          await supabase.from('tour_slots').insert(mappedSlots);
+        }
+
+        if (templatesData && slotsData && bookingsData) {
+          console.log('✅ Hydrating local store from Supabase...', { count: bookingsData.length });
+          
+          if (bookingsData.length > 0) {
+            const remoteBookings = bookingsData.map(b => ({
+              id: b.id,
+              slotId: b.slot_id,
+              customerId: b.customer_id,
+              passengerCount: b.passenger_count,
+              totalAmount: b.total_amount,
+              amountPaid: b.amount_paid,
+              paymentStatus: b.payment_status,
+              pickupLocation: b.pickup_location,
+              createdAt: b.created_at,
+              specialRequirements: b.special_requirements,
+              guestInfo: b.guest_info,
+              holdExpiresAt: b.hold_expires_at
+            }));
+            
+            set((state) => {
+              // Merge remote bookings over local bookings to ensure UI reflection
+              const localIds = new Set(state.bookings.map(lb => lb.id));
+              const newRemoteBookings = remoteBookings.filter(rb => !localIds.has(rb.id));
+              return { bookings: [...state.bookings, ...newRemoteBookings] };
+            });
+          }
+        }
+
+        // 2. Real-Time Handshake for Bookings (e.g. Admin Confirms Payment -> Boarding Pass flips instantly)
+        supabase.channel('public:bookings')
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bookings' }, (payload) => {
+            console.log('Realtime Update Received:', payload);
+            const updated = payload.new;
+            
+            // Patch local store instantly
+            set((state) => ({
+              bookings: state.bookings.map((b) =>
+                b.id === updated.id
+                  ? { 
+                      ...b, 
+                      paymentStatus: updated.payment_status as PaymentStatus, 
+                      amountPaid: updated.amount_paid 
+                    }
+                  : b
+              )
+            }));
+          }).subscribe();
       },
     }),
     {

@@ -10,7 +10,7 @@ import { usePathname } from 'next/navigation';
 const navItems = [
   { href: '/explore', label: 'Home' },
   { href: '/explore/tours', label: 'Tours' },
-  { href: '/explore/my-bookings', label: 'My Bookings' },
+  { href: '/explore/lookup', label: 'Find Ticket' },
 ];
 
 /* ─── Component ────────────────────────────────────────────────────── */
@@ -69,14 +69,14 @@ export default function ExplorerNavbar() {
           </Link>
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
             <Link
-              href="/explore/my-bookings"
+              href="/explore/lookup"
               style={{
                 color: 'rgba(255,255,255,0.8)', textDecoration: 'none',
                 fontSize: '0.85rem', fontWeight: 600, letterSpacing: '1px',
                 textTransform: 'uppercase', textShadow: '0 2px 8px rgba(0,0,0,0.6)',
               }}
             >
-              My Bookings
+              Find Ticket
             </Link>
             <Link href="/explore/tours" className="vh-nav-btn" style={{ textDecoration: 'none' }}>
               SEE TOURS
