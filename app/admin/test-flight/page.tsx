@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 import { useState, useRef, useEffect } from 'react';
 import { useVegasStore } from '@/lib/useVegasStore';
 import { createClient } from '@supabase/supabase-js';

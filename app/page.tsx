@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import { useVegasStore } from '@/lib/useVegasStore';
 import MainLayout from '@/components/layout/MainLayout';
