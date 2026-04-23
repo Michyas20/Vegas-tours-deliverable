@@ -23,6 +23,8 @@ import type {
   CancellationVerdict,
   CapacityVerdict,
   GeoVerdict,
+  PaymentStatus,
+  AuditAction,
 } from '@/types';
 
 // ─── L1 Engine Imports ──────────────────────────────────────────
@@ -480,7 +482,7 @@ export const useVegasStore = create<VegasStore>()(
         }
 
         const newAmountPaid = booking.amountPaid + amount;
-        let newStatus = booking.paymentStatus;
+        let newStatus: PaymentStatus = booking.paymentStatus;
 
         if (newAmountPaid >= booking.totalAmount) {
           newStatus = 'FULLY_PAID';

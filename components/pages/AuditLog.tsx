@@ -26,11 +26,13 @@ const ACTION_CONFIG: Record<AuditAction, { label: string; icon: React.ElementTyp
   SLOT_MAINTENANCE: { label: 'Maintenance',      icon: AlertTriangle,  color: 'text-warning', bg: 'bg-warning/10', isFinancial: false },
   SLOT_COMPLETED:   { label: 'Completed',        icon: CheckCircle2,   color: 'text-muted-foreground', bg: 'bg-accent', isFinancial: false },
   CAPACITY_ADJUSTED:{ label: 'Capacity Adj.',    icon: Users,          color: 'text-info',    bg: 'bg-info/10',    isFinancial: false },
+  PAYMENT_CONFIRMED:{ label: 'Verified',         icon: CheckCircle2,   color: 'text-success', bg: 'bg-success/10', isFinancial: true },
 };
 
 const ALL_ACTIONS: AuditAction[] = [
   'BOOKING_CREATED', 'BOOKING_CANCELLED', 'PAYMENT_DEPOSIT', 'PAYMENT_FULL',
-  'SLOT_CREATED', 'SLOT_MAINTENANCE', 'SLOT_COMPLETED', 'CAPACITY_ADJUSTED',
+  'PAYMENT_CONFIRMED', 'SLOT_CREATED', 'SLOT_MAINTENANCE', 'SLOT_COMPLETED', 
+  'CAPACITY_ADJUSTED',
 ];
 
 /* ─── Component ────────────────────────────────────────────────────── */

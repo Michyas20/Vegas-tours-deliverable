@@ -4,6 +4,7 @@ import { useVegasStore } from '@/lib/useVegasStore';
 import { createClient } from '@supabase/supabase-js';
 import { CheckCircle2, RotateCcw, Activity, Server, CreditCard, Ticket } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { notFound } from 'next/navigation';
 
 // Create a direct client just for the DB ping verification task
 const supabase = createClient(
@@ -19,6 +20,11 @@ interface LogEntry {
 }
 
 export default function TestFlightDashboard() {
+  // ─── PRODUCTION SECURITY GUARD ───
+  if (process.env.NODE_ENV === 'production') {
+    return notFound();
+  }
+
   const store = useVegasStore();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -62,7 +68,7 @@ export default function TestFlightDashboard() {
       await new Promise(r => setTimeout(r, 1000));
       
       // Self-Healing Mock Logic
-      let testTemplateId;
+      let testTemplateId: string;
       if (store.templates.length > 0) {
         testTemplateId = store.templates[0].id;
         addLog(`Using Template: ${store.templates[0].title} (ID: ${testTemplateId})`, 'info');
@@ -98,8 +104,9 @@ export default function TestFlightDashboard() {
       
       const payload = {
         slotId: activeSlot.id,
+        customerId: 'qa-agent-007',
         passengerCount: 1,
-        pickupLocation: { type: 'hotel' as const, hotelName: 'The Bellagio' },
+        pickupLocation: { type: 'hotel' as const, hotelName: 'The Bellagio', address: '3600 S Las Vegas Blvd' },
         guestInfo: { fullName: 'Automated QA Agent', email: 'qa@vegashorizon.com', phone: '555-QA' }
       };
       

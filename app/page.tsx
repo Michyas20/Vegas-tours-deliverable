@@ -3,12 +3,22 @@
 import { useVegasStore } from '@/lib/useVegasStore';
 import MainLayout from '@/components/layout/MainLayout';
 import ConciergeDashboard from '@/components/pages/ConciergeDashboard';
-import { Compass, Map } from 'lucide-react';
+import { Compass, Map, Loader2 } from 'lucide-react';
 import { useState } from 'react';
+import { useHasHydrated } from '@/lib/hooks';
 
 export default function Home() {
+  const hasHydrated = useHasHydrated();
   const { currentRole } = useVegasStore();
   const [activeView, setActiveView] = useState('templates');
+
+  if (!hasHydrated) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-background text-primary">
+        <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <MainLayout activeView={activeView} onNavigate={setActiveView}>
