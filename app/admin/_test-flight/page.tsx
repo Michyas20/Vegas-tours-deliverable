@@ -61,8 +61,40 @@ export default function TestFlightDashboard() {
       // Delay to simulate human wait
       await new Promise(r => setTimeout(r, 1000));
       
-      const activeSlot = store.slots.find(s => s.currentCapacity < s.maxCapacity);
-      if (!activeSlot) throw new Error('No active slots available to test booking.');
+      // Self-Healing Mock Logic
+      let testTemplateId;
+      if (store.templates.length > 0) {
+        testTemplateId = store.templates[0].id;
+        addLog(`Using Template: ${store.templates[0].title} (ID: ${testTemplateId})`, 'info');
+      } else {
+        addLog('No local templates found. Injecting "Test Tour" into store...', 'info');
+        testTemplateId = store.addTemplate({
+          title: 'Test Tour',
+          description: 'Automated QA Testing Tour',
+          itinerary: ['Las Vegas Mock Setup'],
+          durationHours: 2,
+          basePricePerPerson: 99,
+          minAge: 0,
+          inclusions: ['Testing Tools']
+        });
+        const injected = store.templates.find(t => t.id === testTemplateId);
+        addLog(`Using Template: ${injected?.title || 'Test Tour'} (ID: ${testTemplateId})`, 'info');
+      }
+
+      let activeSlot = store.slots.find(s => s.templateId === testTemplateId && s.currentCapacity < s.maxCapacity);
+      if (!activeSlot) {
+        addLog('No active slot for selected template. Injecting mock slot...', 'info');
+        const mockSlotId = store.createSlot({
+          templateId: testTemplateId,
+          date: new Date(Date.now() + 86400000).toISOString(),
+          guideId: store.users[0]?.id || 'usr-guide-01',
+          vehicleId: store.vehicles[0]?.id || 'veh-sprinter-01'
+        });
+        activeSlot = store.slots.find(s => s.id === mockSlotId);
+      }
+      
+      if (!activeSlot) throw new Error('Failed to resolve an active slot for testing.');
+
       
       const payload = {
         slotId: activeSlot.id,
@@ -81,7 +113,7 @@ export default function TestFlightDashboard() {
       await new Promise(r => setTimeout(r, 2000)); // allow upserts to resolve gracefully
 
       addLog(`Querying Remote Supabase DB for ${newId}...`, 'pending');
-      const { data: dbVerify, error } = await supabase.from('bookings').select('*').eq('id', newId).single();
+      const { data: dbVerify, error } = await supabase.from('bookings').select('*').eq('id', newId).maybeSingle();
       
       if (error || !dbVerify) {
         addLog(`Database Check missed or failed. Ensure Upsert succeeded. Details: ${error?.message}`, 'error');
