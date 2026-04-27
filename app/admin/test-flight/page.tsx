@@ -130,12 +130,12 @@ export default function TestFlightDashboard() {
       }
 
       // ──────── STEP 3: ADMIN HANDSHAKE ────────
-      addLog('Step 3: Simulating Concierge interaction...', 'info');
+      addLog('Step 3: Simulating Admin interaction...', 'info');
       await new Promise(r => setTimeout(r, 1500));
       
       addLog(`Executing confirmPayment(${newId}) via Verification Hub...`, 'pending');
       store.confirmPayment(newId);
-      addLog('✅ Concierge Verification Broadcasted!', 'success');
+      addLog('✅ Admin Verification Broadcasted!', 'success');
 
       // ──────── STEP 4: BOARDING PASS PROOF ────────
       addLog('Step 4: Evaluating Final Digital Proof...', 'info');
