@@ -1,5 +1,4 @@
 'use client';
-export const dynamic = 'force-dynamic';
 import { useState, useRef, useEffect } from 'react';
 import { useVegasStore } from '@/lib/useVegasStore';
 import { createClient } from '@supabase/supabase-js';
@@ -7,11 +6,11 @@ import { CheckCircle2, RotateCcw, Activity, Server, CreditCard, Ticket } from 'l
 import { QRCodeSVG } from 'qrcode.react';
 import { notFound } from 'next/navigation';
 
-// Create a direct client just for the DB ping verification task
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Fallback dummies prevent build-time crash during SSG.
+// Real values are injected by Vercel at runtime.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://build-bypass.supabase.co';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'build-bypass-key';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 interface LogEntry {
   id: number;
