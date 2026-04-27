@@ -50,7 +50,7 @@ const NAV_MAP: Record<UserRole, NavItem[]> = {
 };
 
 const ROLE_META: Record<UserRole, { label: string; icon: React.ElementType; accent: string; bg: string }> = {
-  CONCIERGE: { label: 'Concierge', icon: Shield,   accent: 'text-primary',     bg: 'bg-primary/10' },
+  CONCIERGE: { label: 'Admin', icon: Shield,   accent: 'text-primary',     bg: 'bg-primary/10' },
   EXPLORER:  { label: 'Explorer',  icon: Compass,  accent: 'text-info',        bg: 'bg-info/10' },
   GUIDE:     { label: 'Guide',     icon: User,     accent: 'text-success',     bg: 'bg-success/10' },
 };
@@ -130,7 +130,7 @@ export default function MainLayout({
               className="w-full appearance-none bg-accent text-foreground text-sm font-medium pl-3 pr-8 py-2.5 rounded-lg border border-border focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
             >
               {ALL_ROLES.map((role) => (
-                <option key={role} value={role}>
+                <option key={role} value={role} hidden={role !== 'CONCIERGE'}>
                   {ROLE_META[role].label} View
                 </option>
               ))}

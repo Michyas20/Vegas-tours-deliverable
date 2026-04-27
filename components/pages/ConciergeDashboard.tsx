@@ -56,7 +56,7 @@ export default function ConciergeDashboard({
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          Concierge Command Center
+          Admin Command Center
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
           Manage tour templates, schedule slots, and monitor system activity.
